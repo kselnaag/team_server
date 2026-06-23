@@ -1,2 +1,2 @@
-# stream_server
-RTMP proxy for streams with fallback
+# team_server
+RTMP proxy-server for streams with fallback
