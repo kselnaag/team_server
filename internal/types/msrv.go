@@ -1,6 +1,6 @@
 package types
 
-type IMsrv interface {
+type ImSrv interface {
 	Start() func(error)
 	PathInit(path string) error
 	PathFini(path string) error

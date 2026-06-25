@@ -15,12 +15,12 @@ var _ T.ITG = (*Tg)(nil)
 type Tg struct {
 	cfg  T.ICfg
 	log  T.ILog
-	msrv T.IMsrv
+	msrv T.ImSrv
 	ctx  context.Context
 	bot  *TG.Bot
 }
 
-func NewTGBot(cfg T.ICfg, log T.ILog, msrv T.IMsrv) *Tg {
+func NewTGBot(cfg T.ICfg, log T.ILog, msrv T.ImSrv) *Tg {
 	return &Tg{
 		cfg:  cfg,
 		log:  log,

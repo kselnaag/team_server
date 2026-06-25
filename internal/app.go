@@ -15,8 +15,8 @@ type App struct {
 	appname string
 	cfg     T.ICfg
 	log     T.ILog
-	msrv    T.IMsrv
-	tg      T.ITG
+	msrv    T.ImSrv
+	//tg      T.ITG
 }
 
 func execPathAndFname() (string, string) {
@@ -41,12 +41,12 @@ func NewApp() *App {
 
 func (a *App) Start() func(err error) {
 	logStop := a.log.Start()
-	MsrvStop := a.msrv.Start()
+	mSrvStop := a.msrv.Start()
 	// TGStop := a.tg.Start()
 	a.log.LogInfo(a.appname + " app started")
 	return func(err error) { // AppStop
 		// TGStop(err)
-		MsrvStop(err)
+		mSrvStop(err)
 		if err != nil {
 			a.log.LogError(fmt.Errorf("%s: %w", a.appname+" app stoped with error", err))
 		} else {
