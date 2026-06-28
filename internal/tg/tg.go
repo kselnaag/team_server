@@ -4,28 +4,40 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"os"
+	"syscall"
 	T "team_server/internal/types"
+	"time"
 
+	"github.com/go-telegram/bot"
 	TG "github.com/go-telegram/bot"
 	TGm "github.com/go-telegram/bot/models"
+	"golang.org/x/net/proxy"
 )
 
 var _ T.ITG = (*Tg)(nil)
 
 type Tg struct {
-	cfg  T.ICfg
-	log  T.ILog
-	msrv T.ImSrv
-	ctx  context.Context
-	bot  *TG.Bot
+	cfg T.ICfg
+	log T.ILog
+	//msrv T.ImSrv
+	ctx context.Context
+	bot *TG.Bot
 }
 
-func NewTGBot(cfg T.ICfg, log T.ILog, msrv T.ImSrv) *Tg {
+func NewTGBot(cfg T.ICfg, log T.ILog /*msrv T.ImSrv*/) *Tg {
 	return &Tg{
-		cfg:  cfg,
-		log:  log,
-		msrv: msrv,
+		cfg: cfg,
+		log: log,
+		//msrv: msrv,
 	}
+}
+
+func (tg *Tg) appStop() {
+	tg.log.LogDebug("appStop() called")
+	proc, _ := os.FindProcess(os.Getpid())
+	_ = proc.Signal(syscall.SIGTERM)
 }
 
 /* func (tg *Tg) appRestart() {
@@ -82,35 +94,70 @@ func (tg *Tg) errorHandler(err error) {
 func (tg *Tg) defaultHandler(ctx context.Context, bot *TG.Bot, update *TGm.Update) {}
 
 func (tg *Tg) Start() func(err error) {
-	opts := []TG.Option{
-		//TG.WithMiddlewares(tg.notifyAutoforwardDelete),
-		//TG.WithMiddlewares(tg.authorized),
-		TG.WithDefaultHandler(tg.defaultHandler),
-		TG.WithErrorsHandler(tg.errorHandler),
+	var opts []TG.Option
+	if tg.cfg.GetEnvVal(T.TG_BOT_PROXY) == "ON" {
+		baseDialer, errP := proxy.SOCKS5("tcp", "127.0.0.1:1080", nil, proxy.Direct)
+		if errP != nil {
+			tg.log.LogError(fmt.Errorf("TG.Start(): failed to create socks5 dialer: %w", errP))
+			return func(err error) {}
+		}
+		contextDialer, ok := baseDialer.(proxy.ContextDialer)
+		if !ok {
+			tg.log.LogError(fmt.Errorf("TG.Start(): failed to Type Assert with dialer: dialer does not support context"))
+			return func(err error) {}
+		}
+		customTransport := &http.Transport{DialContext: contextDialer.DialContext}
+		customClient := &http.Client{Transport: customTransport}
+		opts = []TG.Option{
+			TG.WithHTTPClient(10*time.Second, customClient),
+			//TG.WithMiddlewares(tg.authorized),
+			TG.WithDefaultHandler(tg.defaultHandler),
+			TG.WithErrorsHandler(tg.errorHandler),
+		}
+	} else {
+		opts = []TG.Option{
+			//TG.WithMiddlewares(tg.authorized),
+			TG.WithDefaultHandler(tg.defaultHandler),
+			TG.WithErrorsHandler(tg.errorHandler),
+		}
 	}
-	var err error
-	tg.bot, err = TG.New(tg.cfg.GetEnvVal(T.TG_BOT_TOKEN), opts...)
-	if nil != err {
-		tg.log.LogError(fmt.Errorf("TG_bot can not create TG_bot with error: %w", err))
+	var errBot error
+	tg.bot, errBot = TG.New(tg.cfg.GetEnvVal(T.TG_BOT_TOKEN), opts...)
+	if nil != errBot {
+		tg.log.LogError(fmt.Errorf("TG.Start(): can not create TG bot with error: %w", errBot))
+		tg.appStop()
 		return func(err error) {}
 	}
-	/* tg.bot.RegisterHandler(TG.HandlerTypeMessageText, T.COMMAND_INFO, TG.MatchTypeCommandStartOnly, tg.infoHandler)
-	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, T.COMMAND_LOGLEVEL, TG.MatchTypeCommandStartOnly, tg.loglevelHandler)
-	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, T.COMMAND_AUTOFORWARD, TG.MatchTypeCommandStartOnly, tg.forwardHandler)
-	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, T.COMMAND_AUTODEL, TG.MatchTypeCommandStartOnly, tg.delHandler)
-	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, T.COMMAND_DELALL, TG.MatchTypeCommandStartOnly, tg.delallHandler)
-	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, T.COMMAND_HELP, TG.MatchTypeCommandStartOnly, tg.helpHandler)
-	*/
+
 	var ctxCancelTGbot context.CancelFunc
 	tg.ctx, ctxCancelTGbot = context.WithCancel(context.Background())
+	_, _ = tg.bot.DeleteMyCommands(tg.ctx, &bot.DeleteMyCommandsParams{})
+	_, err := tg.bot.SetMyCommands(tg.ctx, &bot.SetMyCommandsParams{
+		Commands: []TGm.BotCommand{{Command: "/start", Description: "Информация + кнопки"}},
+		Scope:    &TGm.BotCommandScopeAllPrivateChats{},
+	})
+	if nil != err {
+		tg.log.LogError(fmt.Errorf("TG.Start(): can not create TG bot menu: %w", err))
+	}
+	_, err = tg.bot.SetChatMenuButton(tg.ctx, &bot.SetChatMenuButtonParams{
+		MenuButton: &TGm.MenuButtonCommands{Type: TGm.MenuButtonTypeCommands},
+	})
+	if err != nil {
+		tg.log.LogError(fmt.Errorf("TG.Start(): can not change TG bot menu: %w", err))
+	}
+	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "/start", TG.MatchTypeExact, tg.startHandler)
+	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "🔴 ВКЛ", TG.MatchTypeExact, tg.InitHandler)
+	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "⚫ ОТКЛ", TG.MatchTypeExact, tg.FiniHandler)
+	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "/user", TG.MatchTypeCommandStartOnly, tg.userHandler)
+
 	go tg.bot.Start(tg.ctx)
-	tg.log.LogInfo("TG_bot started")
+	tg.log.LogInfo("TG.Start(): TG bot started")
 	return func(err error) { // TgStop
 		ctxCancelTGbot()
 		if err != nil {
-			tg.log.LogError(fmt.Errorf("%s: %w", "TG_bot stoped with error", err))
+			tg.log.LogError(fmt.Errorf("TG.Stop(): TG bot stoped with error: %w", err))
 		} else {
-			tg.log.LogInfo("TG_bot stoped")
+			tg.log.LogInfo("TG.Stop(): TG bot stoped")
 		}
 	}
 }

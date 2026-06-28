@@ -30,17 +30,19 @@ func NewMediaServer(cfg T.ICfg, log T.ILog, appdir string) *MSrv {
 	}
 }
 
-func (msrv *MSrv) sendPatchReq(url string, payload map[string]any) error {
+func (msrv *MSrv) sendPatchReq(url string, payload map[string]any) {
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("PatchInit: Ошибка сериализации json: %w", err)
+		msrv.log.LogError(fmt.Errorf("sendPatchReq(): Ошибка сериализации json: %w", err))
+		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("PatchInit: Ошибка создания PATCH запроса: %w", err)
+		msrv.log.LogError(fmt.Errorf("sendPatchReq(): Ошибка создания PATCH запроса: %w", err))
+		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
@@ -48,36 +50,35 @@ func (msrv *MSrv) sendPatchReq(url string, payload map[string]any) error {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("PatchInit: Ошибка отправки PATCH запроса: %w", err)
+		msrv.log.LogError(fmt.Errorf("sendPatchReq(): Ошибка отправки PATCH запроса: %w", err))
+		return
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("PatchInit: Ошибка чтения PATCH ответа: %w", err)
+		msrv.log.LogError(fmt.Errorf("sendPatchReq(): Ошибка чтения PATCH ответа: %w", err))
+		return
 	}
-	fmt.Printf("Статус: %s\n", resp.Status)
-	fmt.Printf("Ответ: %s\n", string(body))
-
-	return nil
+	msrv.log.LogInfo("sendPatchReq(" + url + "):" + string(jsonData) + ": -> RESP:" + resp.Status + " " + string(body))
 }
 
-func (msrv *MSrv) PathInit(path string) error {
+func (msrv *MSrv) PathInit(path string) {
 	url := "http://localhost:9997/v3/config/paths/patch/" + path
 	payload := map[string]any{
 		"runOnInitRestart": true,
 		"alwaysAvailable":  true,
 	}
-	return msrv.sendPatchReq(url, payload)
+	msrv.sendPatchReq(url, payload)
 }
 
-func (msrv *MSrv) PathFini(path string) error {
+func (msrv *MSrv) PathFini(path string) {
 	url := "http://localhost:9997/v3/config/paths/patch/" + path
 	payload := map[string]any{
 		"runOnInitRestart": false,
 		"alwaysAvailable":  false,
 	}
-	return msrv.sendPatchReq(url, payload)
+	msrv.sendPatchReq(url, payload)
 }
 
 func (msrv *MSrv) Start() func(err error) {
@@ -109,12 +110,6 @@ func (msrv *MSrv) Start() func(err error) {
 	}(checkCtx)
 	time.Sleep(100 * time.Millisecond)
 	msrv.log.LogInfo("mSrv started")
-
-	/* 	time.Sleep(10 * time.Second)
-	   	msrv.PathFini("kselnaag")
-	   	time.Sleep(10 * time.Second)
-	   	msrv.PathInit("kselnaag") */
-
 	return func(err error) { // MSrvStop
 		checkCancel()
 		time.Sleep(100 * time.Millisecond)

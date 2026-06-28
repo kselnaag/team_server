@@ -31,7 +31,7 @@ func NewCfgMaps(dir, file string) *CfgMaps {
 	envVals[T.TS_APP_NAME] = file
 	envVals[T.TS_APP_IP] = "localhost"
 	envVals[T.TS_LOG_LEVEL] = "INFO" // TRACE, DEBUG, INFO, WARN, ERROR, PANIC, FATAL, NOLOG(default if empty or mess)
-	envVals[T.TS_BOT_PROXY] = "OFF"  // OFF ON
+	envVals[T.TG_BOT_PROXY] = "OFF"  // OFF, ON
 	envVals[T.TG_BOT_TOKEN] = ""
 	return &CfgMaps{
 		envFname:  filepath.Join(dir, file+".env"),
