@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"syscall"
 	T "team_server/internal/types"
 	"time"
@@ -72,26 +73,26 @@ func (tg *Tg) errorHandler(err error) {
 	})
 }
 
-/* func (tg *Tg) authorized(next TG.HandlerFunc) TG.HandlerFunc {
+func (tg *Tg) authorized(next TG.HandlerFunc) TG.HandlerFunc {
 	return func(ctx context.Context, bot *TG.Bot, update *TGm.Update) {
-		if update.Message != nil {
-			msg := update.Message
-			if (len(msg.Text) > 0) && (msg.Text[0] == '/') {
-				usersAutorized := tg.getChatAdmins(tg.cfg.GetJsonAdmin().TgChannelID, update)
-				for id := range *usersAutorized {
-					if (update.Message.From.ID == id) && (update.Message.Chat.Type == TGm.ChatTypePrivate) {
-						next(ctx, bot, update)
-						return
-					}
-				}
+		msg := update.Message
+		if (msg != nil) && (len(msg.Text) > 0) && (msg.Text[0] == '/') {
+			IDstr := strconv.FormatInt(msg.Chat.ID, 10)
+			if IDstr == tg.cfg.GetJsonAdmin().TgUserID {
+				next(ctx, bot, update)
 				return
 			}
-			next(ctx, bot, update)
+			for _, el := range tg.cfg.GetJsonUsers() {
+				if IDstr == el.TgUserID {
+					next(ctx, bot, update)
+					break
+				}
+			}
 		}
 	}
-} */
+}
 
-func (tg *Tg) defaultHandler(ctx context.Context, bot *TG.Bot, update *TGm.Update) {}
+//func (tg *Tg) defaultHandler(ctx context.Context, bot *TG.Bot, update *TGm.Update) {}
 
 func (tg *Tg) Start() func(err error) {
 	var opts []TG.Option
@@ -110,14 +111,14 @@ func (tg *Tg) Start() func(err error) {
 		customClient := &http.Client{Transport: customTransport}
 		opts = []TG.Option{
 			TG.WithHTTPClient(10*time.Second, customClient),
-			//TG.WithMiddlewares(tg.authorized),
-			TG.WithDefaultHandler(tg.defaultHandler),
+			TG.WithMiddlewares(tg.authorized),
+			//TG.WithDefaultHandler(tg.defaultHandler),
 			TG.WithErrorsHandler(tg.errorHandler),
 		}
 	} else {
 		opts = []TG.Option{
-			//TG.WithMiddlewares(tg.authorized),
-			TG.WithDefaultHandler(tg.defaultHandler),
+			TG.WithMiddlewares(tg.authorized),
+			//TG.WithDefaultHandler(tg.defaultHandler),
 			TG.WithErrorsHandler(tg.errorHandler),
 		}
 	}
@@ -131,24 +132,27 @@ func (tg *Tg) Start() func(err error) {
 
 	var ctxCancelTGbot context.CancelFunc
 	tg.ctx, ctxCancelTGbot = context.WithCancel(context.Background())
-	_, _ = tg.bot.DeleteMyCommands(tg.ctx, &bot.DeleteMyCommandsParams{})
-	_, err := tg.bot.SetMyCommands(tg.ctx, &bot.SetMyCommandsParams{
+	_, err := tg.bot.DeleteMyCommands(tg.ctx, &bot.DeleteMyCommandsParams{Scope: &TGm.BotCommandScopeAllPrivateChats{}})
+	if nil != err {
+		tg.log.LogWarn("TG.Start(): can not Delete TG bot menu: %w", err)
+	}
+	_, err = tg.bot.SetMyCommands(tg.ctx, &bot.SetMyCommandsParams{
 		Commands: []TGm.BotCommand{{Command: "/start", Description: "Информация + кнопки"}},
 		Scope:    &TGm.BotCommandScopeAllPrivateChats{},
 	})
 	if nil != err {
-		tg.log.LogError(fmt.Errorf("TG.Start(): can not create TG bot menu: %w", err))
+		tg.log.LogWarn("TG.Start(): can not Set TG bot menu: %w", err)
 	}
 	_, err = tg.bot.SetChatMenuButton(tg.ctx, &bot.SetChatMenuButtonParams{
-		MenuButton: &TGm.MenuButtonCommands{Type: TGm.MenuButtonTypeCommands},
+		MenuButton: &TGm.MenuButtonCommands{Type: TGm.MenuButtonTypeDefault},
 	})
 	if err != nil {
-		tg.log.LogError(fmt.Errorf("TG.Start(): can not change TG bot menu: %w", err))
+		tg.log.LogWarn("TG.Start(): can not change TG bot Menu button: %w", err)
 	}
 	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "/start", TG.MatchTypeExact, tg.startHandler)
-	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "🔴 ВКЛ", TG.MatchTypeExact, tg.InitHandler)
-	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "⚫ ОТКЛ", TG.MatchTypeExact, tg.FiniHandler)
-	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "/user", TG.MatchTypeCommandStartOnly, tg.userHandler)
+	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "/ON 🔴", TG.MatchTypeExact, tg.InitHandler)
+	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "/OFF ⚫", TG.MatchTypeExact, tg.FiniHandler)
+	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "/path", TG.MatchTypeCommandStartOnly, tg.pathHandler)
 
 	go tg.bot.Start(tg.ctx)
 	tg.log.LogInfo("TG.Start(): TG bot started")

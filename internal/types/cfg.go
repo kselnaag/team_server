@@ -22,6 +22,7 @@ type User struct {
 }
 
 type JsonVals struct {
-	Admin User
-	Users []User
+	TgChannel string
+	Admin     User
+	Users     []User
 }

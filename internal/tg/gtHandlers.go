@@ -2,27 +2,43 @@ package tg
 
 import (
 	"context"
-	"log"
+	"strconv"
+
+	T "team_server/internal/types"
 
 	TG "github.com/go-telegram/bot"
 	TGm "github.com/go-telegram/bot/models"
 )
 
 func (tg *Tg) startHandler(ctx context.Context, bot *TG.Bot, update *TGm.Update) {
+	cfgmsg := T.TS_APP_NAME + "=" + tg.cfg.GetEnvVal(T.TS_APP_NAME) + "\n" +
+		T.TS_APP_IP + "=" + tg.cfg.GetEnvVal(T.TS_APP_IP) + "\n" +
+		T.TG_BOT_PROXY + "=" + tg.cfg.GetEnvVal(T.TG_BOT_PROXY) + "\n" +
+		T.TS_LOG_LEVEL + "=" + tg.cfg.GetEnvVal(T.TS_LOG_LEVEL) + "\n\n"
+	var username string
+	botUserIDstr := strconv.FormatInt(update.Message.Chat.ID, 10)
+	if botUserIDstr == tg.cfg.GetJsonAdmin().TgUserID {
+		username = tg.cfg.GetJsonAdmin().Nickname
+	} else {
+		for _, el := range tg.cfg.GetJsonUsers() {
+			if botUserIDstr == el.TgUserID {
+				username = el.Nickname
+				break
+			}
+		}
+	}
+	path := "PATH=" + username + "\n"
 	kb := &TGm.ReplyKeyboardMarkup{
-		Keyboard:              [][]TGm.KeyboardButton{{{Text: "🔴 ВКЛ"}, {Text: "⚫ ОТКЛ"}}},
+		Keyboard:              [][]TGm.KeyboardButton{{{Text: "/ON 🔴"}, {Text: "/start"}, {Text: "/OFF ⚫"}}},
 		InputFieldPlaceholder: "Включите или отключите стрим-сервер...",
 		ResizeKeyboard:        true,
-		IsPersistent:          false,
+		IsPersistent:          true,
 	}
-	_, err := bot.SendMessage(ctx, &TG.SendMessageParams{
+	_, _ = bot.SendMessage(ctx, &TG.SendMessageParams{
 		ChatID:      update.Message.Chat.ID,
-		Text:        "Привет! Добро пожаловать. Выберите один из вариантов ниже:",
+		Text:        cfgmsg + path,
 		ReplyMarkup: kb,
 	})
-	if err != nil {
-		log.Printf("Ошибка отправки клавиатуры: %v", err)
-	}
 }
 
 func (tg *Tg) InitHandler(ctx context.Context, bot *TG.Bot, update *TGm.Update) {
@@ -39,6 +55,6 @@ func (tg *Tg) FiniHandler(ctx context.Context, bot *TG.Bot, update *TGm.Update) 
 	})
 }
 
-func (tg *Tg) userHandler(ctx context.Context, bot *TG.Bot, update *TGm.Update) {
+func (tg *Tg) pathHandler(ctx context.Context, bot *TG.Bot, update *TGm.Update) {
 
 }
