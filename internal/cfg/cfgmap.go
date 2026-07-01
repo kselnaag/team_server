@@ -17,13 +17,14 @@ import (
 var _ T.ICfg = (*CfgMaps)(nil)
 
 type CfgMaps struct {
-	envFname  string
-	envVals   map[string]string
-	jsonFname string
-	jsonUsers []T.User
-	jsonAdmin T.User
-	log       T.ILog
-	mu        sync.Mutex
+	envFname    string
+	envVals     map[string]string
+	jsonFname   string
+	jsonUsers   []T.User
+	jsonAdmin   T.User
+	jsonChannel string
+	log         T.ILog
+	mu          sync.Mutex
 }
 
 func NewCfgMaps(dir, file string) *CfgMaps {
@@ -60,6 +61,10 @@ func (c *CfgMaps) GetJsonAdmin() T.User {
 	return c.jsonAdmin
 }
 
+func (c *CfgMaps) GetJsonChannel() string {
+	return c.jsonChannel
+}
+
 func (c *CfgMaps) parseFileJsonVars() {
 	fileBuf, err := os.ReadFile(c.jsonFname)
 	if err != nil {
@@ -72,6 +77,7 @@ func (c *CfgMaps) parseFileJsonVars() {
 	}
 	c.jsonUsers = vals.Users
 	c.jsonAdmin = vals.Admin
+	c.jsonChannel = vals.Channel
 }
 
 func (c *CfgMaps) SetEnvVal(setkey string, setval string) {

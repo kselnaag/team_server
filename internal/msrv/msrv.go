@@ -30,55 +30,66 @@ func NewMediaServer(cfg T.ICfg, log T.ILog, appdir string) *MSrv {
 	}
 }
 
-func (msrv *MSrv) sendPatchReq(url string, payload map[string]any) {
+func (msrv *MSrv) sendPatchReq(url string, payload map[string]any) error {
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
-		msrv.log.LogError(fmt.Errorf("sendPatchReq(): Ошибка сериализации json: %w", err))
-		return
+		err = fmt.Errorf("sendPatchReq(): Ошибка сериализации json: %w", err)
+		msrv.log.LogError(err)
+		return err
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		msrv.log.LogError(fmt.Errorf("sendPatchReq(): Ошибка создания PATCH запроса: %w", err))
-		return
+		err = fmt.Errorf("sendPatchReq(): Ошибка создания PATCH запроса: %w", err)
+		msrv.log.LogError(err)
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		msrv.log.LogError(fmt.Errorf("sendPatchReq(): Ошибка отправки PATCH запроса: %w", err))
-		return
+		err = fmt.Errorf("sendPatchReq(): Ошибка отправки PATCH запроса: %w", err)
+		msrv.log.LogError(err)
+		return err
 	}
 	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
+	_, err = io.ReadAll(resp.Body)
 	if err != nil {
-		msrv.log.LogError(fmt.Errorf("sendPatchReq(): Ошибка чтения PATCH ответа: %w", err))
-		return
+		err = fmt.Errorf("sendPatchReq(): Ошибка чтения PATCH ответа: %w", err)
+		msrv.log.LogError(err)
+		return err
 	}
-	msrv.log.LogInfo("sendPatchReq(" + url + "):" + string(jsonData) + ": -> RESP:" + resp.Status + " " + string(body))
+	return nil
 }
 
-func (msrv *MSrv) PathInit(path string) {
+func (msrv *MSrv) PathInit(path string) error {
 	url := "http://localhost:9997/v3/config/paths/patch/" + path
 	payload := map[string]any{
 		"runOnInitRestart": true,
 		"alwaysAvailable":  true,
 	}
-	msrv.sendPatchReq(url, payload)
+	err := msrv.sendPatchReq(url, payload)
+	if err != nil {
+		err = fmt.Errorf("PathInit("+path+"): Ошибка Patch запроса: %w", err)
+		msrv.log.LogInfo(err.Error())
+	}
+	return err
 }
 
-func (msrv *MSrv) PathFini(path string) {
+func (msrv *MSrv) PathFini(path string) error {
 	url := "http://localhost:9997/v3/config/paths/patch/" + path
 	payload := map[string]any{
 		"runOnInitRestart": false,
 		"alwaysAvailable":  false,
 	}
-	msrv.sendPatchReq(url, payload)
+	err := msrv.sendPatchReq(url, payload)
+	if err != nil {
+		err = fmt.Errorf("PathFini("+path+"): Ошибка Patch запроса: %w", err)
+		msrv.log.LogInfo(err.Error())
+	}
+	return err
 }
 
 func (msrv *MSrv) Start() func(err error) {

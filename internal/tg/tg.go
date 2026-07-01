@@ -11,7 +11,6 @@ import (
 	T "team_server/internal/types"
 	"time"
 
-	"github.com/go-telegram/bot"
 	TG "github.com/go-telegram/bot"
 	TGm "github.com/go-telegram/bot/models"
 	"golang.org/x/net/proxy"
@@ -20,18 +19,18 @@ import (
 var _ T.ITG = (*Tg)(nil)
 
 type Tg struct {
-	cfg T.ICfg
-	log T.ILog
-	//msrv T.ImSrv
-	ctx context.Context
-	bot *TG.Bot
+	cfg  T.ICfg
+	log  T.ILog
+	msrv T.ImSrv
+	ctx  context.Context
+	bot  *TG.Bot
 }
 
-func NewTGBot(cfg T.ICfg, log T.ILog /*msrv T.ImSrv*/) *Tg {
+func NewTGBot(cfg T.ICfg, log T.ILog, msrv T.ImSrv) *Tg {
 	return &Tg{
-		cfg: cfg,
-		log: log,
-		//msrv: msrv,
+		cfg:  cfg,
+		log:  log,
+		msrv: msrv,
 	}
 }
 
@@ -68,7 +67,7 @@ func (tg *Tg) errorHandler(err error) {
 	}
 	tg.log.LogError(err)
 	_, _ = tg.bot.SendMessage(tg.ctx, &TG.SendMessageParams{
-		ChatID: tg.cfg.GetJsonAdmin().TgUserID,
+		ChatID: tg.cfg.GetJsonChannel(),
 		Text:   "TG errorHandler(): " + err.Error(),
 	})
 }
@@ -85,14 +84,20 @@ func (tg *Tg) authorized(next TG.HandlerFunc) TG.HandlerFunc {
 			for _, el := range tg.cfg.GetJsonUsers() {
 				if IDstr == el.TgUserID {
 					next(ctx, bot, update)
-					break
+					return
 				}
 			}
 		}
 	}
 }
 
-//func (tg *Tg) defaultHandler(ctx context.Context, bot *TG.Bot, update *TGm.Update) {}
+func (tg *Tg) defaultHandler(ctx context.Context, bot *TG.Bot, update *TGm.Update) {
+	msg := "ERROR DEFAULT PATH: " + update.Message.Text
+	_, _ = bot.SendMessage(ctx, &TG.SendMessageParams{
+		ChatID: update.Message.Chat.ID,
+		Text:   msg,
+	})
+}
 
 func (tg *Tg) Start() func(err error) {
 	var opts []TG.Option
@@ -112,13 +117,13 @@ func (tg *Tg) Start() func(err error) {
 		opts = []TG.Option{
 			TG.WithHTTPClient(10*time.Second, customClient),
 			TG.WithMiddlewares(tg.authorized),
-			//TG.WithDefaultHandler(tg.defaultHandler),
+			TG.WithDefaultHandler(tg.defaultHandler),
 			TG.WithErrorsHandler(tg.errorHandler),
 		}
 	} else {
 		opts = []TG.Option{
 			TG.WithMiddlewares(tg.authorized),
-			//TG.WithDefaultHandler(tg.defaultHandler),
+			TG.WithDefaultHandler(tg.defaultHandler),
 			TG.WithErrorsHandler(tg.errorHandler),
 		}
 	}
@@ -132,27 +137,27 @@ func (tg *Tg) Start() func(err error) {
 
 	var ctxCancelTGbot context.CancelFunc
 	tg.ctx, ctxCancelTGbot = context.WithCancel(context.Background())
-	_, err := tg.bot.DeleteMyCommands(tg.ctx, &bot.DeleteMyCommandsParams{Scope: &TGm.BotCommandScopeAllPrivateChats{}})
+	_, err := tg.bot.DeleteMyCommands(tg.ctx, &TG.DeleteMyCommandsParams{Scope: &TGm.BotCommandScopeAllPrivateChats{}})
 	if nil != err {
 		tg.log.LogWarn("TG.Start(): can not Delete TG bot menu: %w", err)
 	}
-	_, err = tg.bot.SetMyCommands(tg.ctx, &bot.SetMyCommandsParams{
+	_, err = tg.bot.SetMyCommands(tg.ctx, &TG.SetMyCommandsParams{
 		Commands: []TGm.BotCommand{{Command: "/start", Description: "Информация + кнопки"}},
 		Scope:    &TGm.BotCommandScopeAllPrivateChats{},
 	})
 	if nil != err {
 		tg.log.LogWarn("TG.Start(): can not Set TG bot menu: %w", err)
 	}
-	_, err = tg.bot.SetChatMenuButton(tg.ctx, &bot.SetChatMenuButtonParams{
+	_, err = tg.bot.SetChatMenuButton(tg.ctx, &TG.SetChatMenuButtonParams{
 		MenuButton: &TGm.MenuButtonCommands{Type: TGm.MenuButtonTypeDefault},
 	})
 	if err != nil {
 		tg.log.LogWarn("TG.Start(): can not change TG bot Menu button: %w", err)
 	}
 	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "/start", TG.MatchTypeExact, tg.startHandler)
-	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "/ON 🔴", TG.MatchTypeExact, tg.InitHandler)
-	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "/OFF ⚫", TG.MatchTypeExact, tg.FiniHandler)
-	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "/path", TG.MatchTypeCommandStartOnly, tg.pathHandler)
+	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "/ON 🔴", TG.MatchTypeExact, tg.ONHandler)
+	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "/OFF ⚫", TG.MatchTypeExact, tg.OFFHandler)
+	tg.bot.RegisterHandler(TG.HandlerTypeMessageText, "path", TG.MatchTypeCommandStartOnly, tg.pathHandler)
 
 	go tg.bot.Start(tg.ctx)
 	tg.log.LogInfo("TG.Start(): TG bot started")

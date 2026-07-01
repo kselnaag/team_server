@@ -5,6 +5,7 @@ type ICfg interface {
 	SetEnvVal(string, string)
 	GetJsonUsers() []User
 	GetJsonAdmin() User
+	GetJsonChannel() string
 	Parse() ICfg
 }
 
@@ -22,7 +23,7 @@ type User struct {
 }
 
 type JsonVals struct {
-	TgChannel string
-	Admin     User
-	Users     []User
+	Channel string
+	Admin   User
+	Users   []User
 }
