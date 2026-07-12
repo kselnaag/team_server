@@ -2,4 +2,5 @@
 .vscode/**
 build/deploy.sh
 config/stoilo_server.env
+config/stoilo_server.json
 *.txt

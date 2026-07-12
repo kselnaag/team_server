@@ -92,7 +92,7 @@ func (tg *Tg) authorized(next TG.HandlerFunc) TG.HandlerFunc {
 }
 
 func (tg *Tg) defaultHandler(ctx context.Context, bot *TG.Bot, update *TGm.Update) {
-	msg := "ERROR DEFAULT PATH: " + update.Message.Text
+	msg := "ERROR: DEFAULT PATH: " + update.Message.Text
 	_, _ = bot.SendMessage(ctx, &TG.SendMessageParams{
 		ChatID: update.Message.Chat.ID,
 		Text:   msg,

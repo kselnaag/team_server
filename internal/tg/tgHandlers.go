@@ -131,6 +131,10 @@ func (tg *Tg) pathHandler(ctx context.Context, bot *TG.Bot, update *TGm.Update) 
 					ChatID: tg.cfg.GetJsonChannel(),
 					Text:   msg,
 				})
+				_, _ = bot.SendMessage(ctx, &TG.SendMessageParams{
+					ChatID: update.Message.Chat.ID,
+					Text:   msg,
+				})
 				return
 			case "OFF":
 				err := tg.msrv.PathFini(path)
@@ -145,6 +149,10 @@ func (tg *Tg) pathHandler(ctx context.Context, bot *TG.Bot, update *TGm.Update) 
 				})
 				_, _ = bot.SendMessage(ctx, &TG.SendMessageParams{
 					ChatID: tg.cfg.GetJsonChannel(),
+					Text:   msg,
+				})
+				_, _ = bot.SendMessage(ctx, &TG.SendMessageParams{
+					ChatID: update.Message.Chat.ID,
 					Text:   msg,
 				})
 				return
