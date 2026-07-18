@@ -110,11 +110,14 @@ func (msrv *MSrv) Start() func(err error) {
 				cmd.Dir = msrv.appdir
 				cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 				if err := cmd.Start(); err != nil {
+					msrv.log.LogError(fmt.Errorf("mediamtx can not started with error: %w", err))
 					procCancel()
 					continue
 				}
 				msrv.log.LogInfo("mediamtx started")
-				_ = cmd.Wait()
+				if err := cmd.Wait(); err != nil {
+					msrv.log.LogDebug("mediamtx stoped with error: %w", err)
+				}
 			}
 			msrv.log.LogInfo("mediamtx stoped")
 		}
