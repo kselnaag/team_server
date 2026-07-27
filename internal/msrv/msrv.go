@@ -108,6 +108,7 @@ func (msrv *MSrv) Start() func(err error) {
 				procCtx, procCancel = context.WithCancel(ctx)
 				cmd := exec.CommandContext(procCtx, filepath.Join(msrv.appdir, "mediamtx"))
 				cmd.Dir = msrv.appdir
+				cmd.Env = append(os.Environ(), "GOMAXPROCS=1")
 				cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 				if err := cmd.Start(); err != nil {
 					msrv.log.LogError(fmt.Errorf("mediamtx can not started with error: %w", err))
